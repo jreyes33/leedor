@@ -3,18 +3,22 @@ use crate::utils;
 use js_sys::{ArrayBuffer, Uint8Array};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{console, Event, FileReader, HtmlInputElement};
+use web_sys::{
+    console, Document, Event, FileReader, HtmlInputElement, ShadowRootInit, ShadowRootMode,
+};
 
 type JsResult<T> = std::result::Result<T, JsValue>;
 
 #[wasm_bindgen]
 pub fn run() -> JsResult<()> {
     utils::set_panic_hook();
-    let document = web_sys::window()
-        .ok_or("no window")?
-        .document()
-        .ok_or("no document in window")?;
+    let document = document().ok_or("no document")?;
     let file_input = document.get_element_by_id("file").ok_or("no #file")?;
+    let content_div = document
+        .get_element_by_id("book-content")
+        .ok_or("no #book-content")?;
+    let init = ShadowRootInit::new(ShadowRootMode::Open);
+    content_div.attach_shadow(&init)?;
     let handler = Closure::wrap(Box::new(handle_file_change) as Box<Fn(_) -> JsResult<()>>);
     file_input.add_event_listener_with_callback("change", handler.as_ref().unchecked_ref())?;
     handler.forget();
@@ -46,14 +50,22 @@ fn handle_file_load(e: Event) -> JsResult<()> {
     Ok(())
 }
 
-fn render_content(first_chapter: &str) -> JsResult<()> {
-    let document = web_sys::window()
-        .ok_or("no window")?
-        .document()
-        .ok_or("no document in window")?;
-    let content = document
+fn render_content(content: &str) -> JsResult<()> {
+    let root = document()
+        .ok_or("no document")?
         .get_element_by_id("book-content")
-        .ok_or("no #book-content")?;
-    content.set_inner_html(first_chapter);
+        .ok_or("no #book-content")?
+        .shadow_root()
+        .ok_or("no shadow root")?;
+    root.set_inner_html(content);
     Ok(())
+}
+
+fn document() -> Option<Document> {
+    if let Some(window) = web_sys::window() {
+        if let Some(document) = window.document() {
+            return Some(document);
+        }
+    }
+    None
 }

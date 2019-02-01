@@ -37,6 +37,9 @@ features = [
   "HtmlElement",
   "HtmlInputElement",
   "Node",
+  "ShadowRoot",
+  "ShadowRootInit",
+  "ShadowRootMode",
   "Window",
   "console",
 ]
