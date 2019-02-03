@@ -4,4 +4,5 @@ node_modules
 crate/bin
 crate/pkg
 crate/target
+crate/tests/ebooks/nonfree
 crate/wasm-pack.log

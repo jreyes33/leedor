@@ -188,22 +188,23 @@ mod tests {
     use super::*;
 
     type Result<T> = std::result::Result<T, Box<std::error::Error>>;
+    const BOOK_PATH: &'static str = "tests/ebooks/rosa.epub";
 
     #[test]
     fn read_first_chapter() -> Result<()> {
-        let bytes = std::fs::read("tests/ebooks/mice.epub")?;
+        let bytes = std::fs::read(BOOK_PATH)?;
         let mut epub = Epub::new(bytes)?;
         let chapter_html = epub.chapter(0)?;
-        assert!(chapter_html.contains("epub:type=\"cover\""));
+        assert!(chapter_html.contains("<h1 id=\"pgepubid00000\">BRIEFE AUS DEM GEFÄNGNIS</h1>"));
         Ok(())
     }
 
     #[test]
     fn doc_count() -> Result<()> {
-        let bytes = std::fs::read("tests/ebooks/mice.epub")?;
+        let bytes = std::fs::read(BOOK_PATH)?;
         let epub = Epub::new(bytes)?;
         let count = epub.doc_count()?;
-        assert_eq!(15, count);
+        assert_eq!(3, count);
         Ok(())
     }
 }
