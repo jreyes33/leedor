@@ -1,4 +1,5 @@
 mod epub;
+mod error;
 mod utils;
 mod web;
 
