@@ -2,7 +2,7 @@ use crate::error::Result;
 use minidom::{Children, Element};
 use std::collections::HashMap;
 use std::io::{BufReader, Cursor, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 
 struct Descendants<'a> {
@@ -37,9 +37,9 @@ impl Descend for minidom::Element {
 }
 
 type ItemId = String;
-type Manifest = HashMap<ItemId, ManifestItem>;
 type Spine<'a> = Vec<&'a ManifestItem>;
 type Zip = ZipArchive<Cursor<Vec<u8>>>;
+type Manifest = HashMap<ItemId, ManifestItem>;
 
 #[derive(Debug)]
 struct ManifestItem {
@@ -52,7 +52,7 @@ struct ManifestItem {
 pub struct Epub {
     manifest: Manifest,
     opf_doc: Element,
-    opf_path: String,
+    opf_path: PathBuf,
     zip: Zip,
 }
 
@@ -60,16 +60,17 @@ impl Epub {
     // TODO: clean up. Implement &[u8] constructor.
     pub fn new(bytes: Vec<u8>) -> Result<Epub> {
         let mut zip = ZipArchive::new(Cursor::new(bytes))?;
-        let container_doc = parse_xml(&mut zip, "META-INF/container.xml")?;
+        let container_doc = parse_xml(zip.by_name("META-INF/container.xml")?)?;
         let rootfile_node = container_doc
             .descendants()
             .find(|n| n.name() == "rootfile")
             .ok_or("no rootfile in container.xml")?;
-        let opf_path = rootfile_node
+        let opf_str_path = rootfile_node
             .attr("full-path")
-            .ok_or("no full-path attribute in rootfile")?
-            .to_string();
-        let opf_doc = parse_xml(&mut zip, &opf_path)?;
+            .ok_or("no full-path attribute in rootfile")?;
+        let opf_file = zip.by_name(opf_str_path)?;
+        let opf_path = opf_file.sanitized_name();
+        let opf_doc = parse_xml(opf_file)?;
         let manifest_node = opf_doc
             .children()
             .find(|n| n.name() == "manifest")
@@ -108,7 +109,6 @@ impl Epub {
         Ok(spine.len())
     }
 
-    // TODO: replace css with base64 data URLs.
     pub fn chapter(&mut self, item_idx: usize) -> Result<String> {
         let spine = self.spine()?;
         let doc_href = spine
@@ -116,34 +116,53 @@ impl Epub {
             .ok_or("item_idx not in spine")?
             .href
             .clone();
-        let mut doc = self.parse_xml(&doc_href)?;
-        self.convert_images(&mut doc)?;
+        let doc_path = relative_path(&doc_href, &self.opf_path);
+        let doc_file = self.zip.by_name(doc_path.to_str().ok_or("invalid path")?)?;
+        let mut doc = parse_xml(doc_file)?;
+        self.inline_resources(&mut doc, &doc_path)?;
         let mut doc_bytes = Vec::new();
         doc.write_to(&mut doc_bytes)?;
         Ok(String::from_utf8(doc_bytes)?)
     }
 
     // TODO: make it non-recursive.
-    // TODO: get mimetype from manifest.
-    fn convert_images(&mut self, elem: &mut Element) -> Result<()> {
-        if elem.name() == "img" {
-            if let Some(img_href) = elem.attr("src") {
-                dbg!(img_href);
-                let img_path = relative_path(img_href, &self.opf_path);
-                let img_file = self.zip.by_name(&img_path)?;
-                let mut bytes = vec![];
-                let mut buf_reader = BufReader::new(img_file);
-                buf_reader.read_to_end(&mut bytes)?;
-                let mut new_value = String::from("data:image/png;base64,");
-                base64::encode_config_buf(&bytes, base64::STANDARD, &mut new_value);
-                elem.set_attr("src", new_value);
-            }
+    fn inline_resources(&mut self, elem: &mut Element, doc_path: &Path) -> Result<()> {
+        for c in elem.children_mut() {
+            self.inline_resources(c, doc_path)?;
         }
 
-        for c in elem.children_mut() {
-            self.convert_images(c)?;
-        }
+        let attr_name = match elem.name() {
+            "img" => "src",
+            "image" => "xlink:href",
+            "link" => "href",
+            _ => return Ok(()),
+        };
+        let img_href = match elem.attr(attr_name) {
+            Some(s) => s,
+            None => return Ok(()),
+        };
+        let resource_path = relative_path(img_href, doc_path);
+        let media_type = self.media_type(&resource_path).unwrap_or_default();
+        let mut attr_value = format!("data:{};base64,", media_type);
+        let path_str = resource_path.to_str().ok_or("invalid path")?;
+        let img_file = self.zip.by_name(path_str)?;
+        let mut bytes = vec![];
+        let mut buf_reader = BufReader::new(img_file);
+        buf_reader.read_to_end(&mut bytes)?;
+        base64::encode_config_buf(&bytes, base64::STANDARD, &mut attr_value);
+        elem.set_attr(attr_name, attr_value);
         Ok(())
+    }
+
+    fn media_type(&self, path: &Path) -> Option<&str> {
+        let item_opt = self.manifest.values().find(|i| {
+            let item_path = relative_path(&i.href, &self.opf_path);
+            item_path == path
+        });
+        if let Some(item) = item_opt {
+            return Some(&item.media_type);
+        }
+        None
     }
 
     // TODO: memoize spine.
@@ -171,11 +190,6 @@ impl Epub {
         Ok(spine_node)
     }
 
-    // TODO: find a way to avoid needing `.clone()`.
-    fn parse_xml(&mut self, filename: &str) -> Result<Element> {
-        parse_xml(&mut self.zip, &relative_path(&filename, &self.opf_path))
-    }
-
     // TODO: the NCX file is superseded and marked for removal in EPUB 3.
     #[allow(dead_code)]
     fn ncx_doc(&mut self) -> Result<Element> {
@@ -187,22 +201,31 @@ impl Epub {
             .manifest
             .get(ncx_id)
             .ok_or("toc in spine not defined in manifest")?;
-        let ncx_doc = self.parse_xml(&ncx_item.href.clone())?;
+        let ncx_doc = parse_xml(self.zip.by_name(&ncx_item.href)?)?;
         Ok(ncx_doc)
     }
 }
 
-fn parse_xml(zip: &mut Zip, filename: &str) -> Result<Element> {
-    let buf_reader = BufReader::new(zip.by_name(filename)?);
+fn parse_xml<R>(contents: R) -> Result<Element>
+where
+    R: std::io::Read,
+{
+    let buf_reader = BufReader::new(contents);
     let mut xml_reader = quick_xml::Reader::from_reader(buf_reader);
     Ok(Element::from_reader(&mut xml_reader)?)
 }
 
-fn relative_path<'p>(path: &'p str, relative_to: &str) -> String {
-    match Path::new(relative_to).parent() {
-        Some(dir) => dir.join(path).to_str().expect("invalid path").to_string(),
-        None => path.to_string(),
+fn relative_path<'a>(path_str: &'a str, relative_to: &'a Path) -> PathBuf {
+    let mut built_path = PathBuf::from(relative_to);
+    built_path.pop(); // remove relative_to file name
+    for segment in Path::new(path_str) {
+        if segment == ".." {
+            built_path.pop();
+        } else {
+            built_path.push(segment);
+        }
     }
+    built_path
 }
 
 #[cfg(test)]
