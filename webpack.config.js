@@ -22,4 +22,12 @@ module.exports = {
       crateDirectory: crate,
     }),
   ],
+  module: {
+    rules: [
+      {
+        test: /\.css$/,
+        use: ["style-loader", "css-loader"],
+      },
+    ],
+  },
 }
