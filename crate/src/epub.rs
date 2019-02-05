@@ -1,7 +1,7 @@
 use crate::error::Result;
 use minidom::{Children, Element};
 use std::collections::HashMap;
-use std::io::{BufReader, Cursor};
+use std::io::{BufReader, Cursor, Read};
 use std::path::Path;
 use zip::ZipArchive;
 
@@ -108,7 +108,7 @@ impl Epub {
         Ok(spine.len())
     }
 
-    // TODO: replace img and css with base64 data URLs.
+    // TODO: replace css with base64 data URLs.
     pub fn chapter(&mut self, item_idx: usize) -> Result<String> {
         let spine = self.spine()?;
         let doc_href = spine
@@ -116,12 +116,34 @@ impl Epub {
             .ok_or("item_idx not in spine")?
             .href
             .clone();
-        let first_doc = self.parse_xml(&doc_href)?;
-        let mut doc_bytes: Vec<u8> = Vec::new();
-        first_doc.write_to(&mut doc_bytes)?;
-        // let img_nodes: Vec<_> = first_doc.descendants().filter(|n| n.name() == "img").collect();
-        // dbg!(img_nodes);
+        let mut doc = self.parse_xml(&doc_href)?;
+        self.convert_images(&mut doc)?;
+        let mut doc_bytes = Vec::new();
+        doc.write_to(&mut doc_bytes)?;
         Ok(String::from_utf8(doc_bytes)?)
+    }
+
+    // TODO: make it non-recursive.
+    // TODO: get mimetype from manifest.
+    fn convert_images(&mut self, elem: &mut Element) -> Result<()> {
+        if elem.name() == "img" {
+            if let Some(img_href) = elem.attr("src") {
+                dbg!(img_href);
+                let img_path = relative_path(img_href, &self.opf_path);
+                let img_file = self.zip.by_name(&img_path)?;
+                let mut bytes = vec![];
+                let mut buf_reader = BufReader::new(img_file);
+                buf_reader.read_to_end(&mut bytes)?;
+                let mut new_value = String::from("data:image/png;base64,");
+                base64::encode_config_buf(&bytes, base64::STANDARD, &mut new_value);
+                elem.set_attr("src", new_value);
+            }
+        }
+
+        for c in elem.children_mut() {
+            self.convert_images(c)?;
+        }
+        Ok(())
     }
 
     // TODO: memoize spine.
@@ -196,6 +218,15 @@ mod tests {
         let mut epub = Epub::new(bytes)?;
         let chapter_html = epub.chapter(0)?;
         assert!(chapter_html.contains("<h1 id=\"pgepubid00000\">BRIEFE AUS DEM GEFÄNGNIS</h1>"));
+        Ok(())
+    }
+
+    #[test]
+    fn images_replaced_with_data_url() -> Result<()> {
+        let bytes = std::fs::read(BOOK_PATH)?;
+        let mut epub = Epub::new(bytes)?;
+        let chapter_html = epub.chapter(0)?;
+        assert!(chapter_html.contains("<img alt=\"\" src=\"data:image/png;base64,"));
         Ok(())
     }
 

@@ -1,5 +1,6 @@
 use std::convert::From;
 use std::fmt;
+use std::io;
 use std::string::FromUtf8Error;
 use wasm_bindgen::JsValue;
 use zip::result::ZipError;
@@ -9,6 +10,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     LeedorError(&'static str),
+    IoError(io::Error),
     MinidomError(minidom::Error),
     StringError(FromUtf8Error),
     ZipError(ZipError),
@@ -17,6 +19,12 @@ pub enum Error {
 impl From<&'static str> for Error {
     fn from(err: &'static str) -> Error {
         Error::LeedorError(err)
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::IoError(err)
     }
 }
 
@@ -49,6 +57,7 @@ impl fmt::Display for Error {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let error_str = match self {
             Error::LeedorError(s) => format!("LeedorError: {}", s),
+            Error::IoError(e) => format!("IoError: {}", e),
             Error::MinidomError(e) => format!("MinidomError: {}", e),
             Error::StringError(e) => format!("StringError: {}", e),
             Error::ZipError(e) => format!("ZipError: {}", e),

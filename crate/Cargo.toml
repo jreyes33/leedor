@@ -11,6 +11,7 @@ repository = "https://github.com/jreyes33/leedor"
 crate-type = ["cdylib"]
 
 [dependencies]
+base64 = "0.10.1"
 cfg-if = "0.1.6"
 js-sys = "0.3.10"
 minidom = "0.10.0"
