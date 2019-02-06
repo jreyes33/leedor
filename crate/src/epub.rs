@@ -1,40 +1,11 @@
 use crate::error::Result;
-use minidom::{Children, Element};
+use crate::xml::{parse_xml, Descend};
+use minidom::Element;
 use std::collections::HashMap;
 use std::io::{BufReader, Cursor, Read};
 use std::path::{Path, PathBuf};
+use url::Url;
 use zip::ZipArchive;
-
-struct Descendants<'a> {
-    stack: Vec<Children<'a>>,
-}
-
-impl<'a> Iterator for Descendants<'a> {
-    type Item = &'a Element;
-
-    fn next(&mut self) -> Option<&'a Element> {
-        while let Some(iter) = self.stack.last_mut() {
-            if let Some(elem) = iter.next() {
-                self.stack.push(elem.children());
-                return Some(elem);
-            } else {
-                self.stack.pop();
-            }
-        }
-        None
-    }
-}
-
-trait Descend {
-    fn descendants(&self) -> Descendants;
-}
-
-impl Descend for minidom::Element {
-    fn descendants(&self) -> Descendants {
-        let stack = vec![self.children()];
-        Descendants { stack }
-    }
-}
 
 type ItemId = String;
 type Spine<'a> = Vec<&'a ManifestItem>;
@@ -50,6 +21,8 @@ struct ManifestItem {
 
 #[derive(Debug)]
 pub struct Epub {
+    base_url: Url,
+    current_path: PathBuf,
     manifest: Manifest,
     opf_doc: Element,
     opf_path: PathBuf,
@@ -95,13 +68,14 @@ impl Epub {
                 )
             })
             .collect();
-        let epub = Epub {
+        Ok(Epub {
+            base_url: Url::parse("https://leedor.jreyes.org")?,
+            current_path: opf_path.clone(),
             manifest,
             opf_doc,
             opf_path,
             zip,
-        };
-        Ok(epub)
+        })
     }
 
     pub fn doc_count(&self) -> Result<usize> {
@@ -111,24 +85,32 @@ impl Epub {
 
     pub fn chapter(&mut self, item_idx: usize) -> Result<String> {
         let spine = self.spine()?;
-        let doc_href = spine
-            .get(item_idx)
-            .ok_or("item_idx not in spine")?
-            .href
-            .clone();
-        let doc_path = relative_path(&doc_href, &self.opf_path);
-        let doc_file = self.zip.by_name(doc_path.to_str().ok_or("invalid path")?)?;
+        let item = spine.get(item_idx).ok_or("item_idx not in spine")?;
+        self.current_path = resolve_path(&item.href, &self.opf_path);
+        self.current_chapter()
+    }
+
+    pub fn chapter_by_link(&mut self, link: &str) -> Result<String> {
+        let url = Url::options().base_url(Some(&self.base_url)).parse(link)?;
+        let path = &url.path()[1..]; // drop the slash
+        self.current_path = resolve_path(path, &self.current_path);
+        self.current_chapter()
+    }
+
+    fn current_chapter(&mut self) -> Result<String> {
+        let path_str = self.current_path.to_str().ok_or("invalid path")?;
+        let doc_file = self.zip.by_name(path_str)?;
         let mut doc = parse_xml(doc_file)?;
-        self.inline_resources(&mut doc, &doc_path)?;
-        let mut doc_bytes = Vec::new();
+        self.inline_resources(&mut doc)?;
+        let mut doc_bytes = vec![];
         doc.write_to(&mut doc_bytes)?;
         Ok(String::from_utf8(doc_bytes)?)
     }
 
     // TODO: make it non-recursive.
-    fn inline_resources(&mut self, elem: &mut Element, doc_path: &Path) -> Result<()> {
+    fn inline_resources(&mut self, elem: &mut Element) -> Result<()> {
         for c in elem.children_mut() {
-            self.inline_resources(c, doc_path)?;
+            self.inline_resources(c)?;
         }
 
         let attr_name = match elem.name() {
@@ -141,7 +123,7 @@ impl Epub {
             Some(s) => s,
             None => return Ok(()),
         };
-        let resource_path = relative_path(img_href, doc_path);
+        let resource_path = resolve_path(img_href, &self.current_path);
         let media_type = self.media_type(&resource_path).unwrap_or_default();
         let mut attr_value = format!("data:{};base64,", media_type);
         let path_str = resource_path.to_str().ok_or("invalid path")?;
@@ -156,7 +138,7 @@ impl Epub {
 
     fn media_type(&self, path: &Path) -> Option<&str> {
         let item_opt = self.manifest.values().find(|i| {
-            let item_path = relative_path(&i.href, &self.opf_path);
+            let item_path = resolve_path(&i.href, &self.opf_path);
             item_path == path
         });
         if let Some(item) = item_opt {
@@ -206,16 +188,7 @@ impl Epub {
     }
 }
 
-fn parse_xml<R>(contents: R) -> Result<Element>
-where
-    R: std::io::Read,
-{
-    let buf_reader = BufReader::new(contents);
-    let mut xml_reader = quick_xml::Reader::from_reader(buf_reader);
-    Ok(Element::from_reader(&mut xml_reader)?)
-}
-
-fn relative_path<'a>(path_str: &'a str, relative_to: &'a Path) -> PathBuf {
+fn resolve_path<'a>(path_str: &'a str, relative_to: &'a Path) -> PathBuf {
     let mut built_path = PathBuf::from(relative_to);
     built_path.pop(); // remove relative_to file name
     for segment in Path::new(path_str) {
@@ -232,13 +205,23 @@ fn relative_path<'a>(path_str: &'a str, relative_to: &'a Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    lazy_static::lazy_static! {
+        static ref BYTES: Vec<u8> = std::fs::read("tests/ebooks/rosa.epub").unwrap();
+    }
+
     type Result<T> = std::result::Result<T, Box<std::error::Error>>;
-    const BOOK_PATH: &'static str = "tests/ebooks/rosa.epub";
+
+    #[test]
+    fn doc_count() -> Result<()> {
+        let epub = Epub::new(BYTES.clone())?;
+        let count = epub.doc_count()?;
+        assert_eq!(3, count);
+        Ok(())
+    }
 
     #[test]
     fn read_first_chapter() -> Result<()> {
-        let bytes = std::fs::read(BOOK_PATH)?;
-        let mut epub = Epub::new(bytes)?;
+        let mut epub = Epub::new(BYTES.clone())?;
         let chapter_html = epub.chapter(0)?;
         assert!(chapter_html.contains("<h1 id=\"pgepubid00000\">BRIEFE AUS DEM GEFÄNGNIS</h1>"));
         Ok(())
@@ -246,19 +229,20 @@ mod tests {
 
     #[test]
     fn images_replaced_with_data_url() -> Result<()> {
-        let bytes = std::fs::read(BOOK_PATH)?;
-        let mut epub = Epub::new(bytes)?;
+        let mut epub = Epub::new(BYTES.clone())?;
         let chapter_html = epub.chapter(0)?;
         assert!(chapter_html.contains("<img alt=\"\" src=\"data:image/png;base64,"));
         Ok(())
     }
 
     #[test]
-    fn doc_count() -> Result<()> {
-        let bytes = std::fs::read(BOOK_PATH)?;
-        let epub = Epub::new(bytes)?;
-        let count = epub.doc_count()?;
-        assert_eq!(3, count);
+    fn read_chapter_by_link() -> Result<()> {
+        let mut epub = Epub::new(BYTES.clone())?;
+        epub.chapter(0)?; // open the chapter with the link
+        let link =
+            "@public@vhost@g@gutenberg@html@files@26964@26964-h@26964-h-2.htm.html#Footnote_1_1";
+        let chapter_html = epub.chapter_by_link(link)?;
+        assert!(chapter_html.contains("id=\"Footnote_1_1\""));
         Ok(())
     }
 }

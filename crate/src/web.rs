@@ -6,7 +6,7 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{
-    console, Document, Event, FileReader, HtmlElement, HtmlInputElement, ShadowRootInit,
+    console, Document, Element, Event, FileReader, HtmlElement, HtmlInputElement, ShadowRootInit,
     ShadowRootMode,
 };
 
@@ -33,12 +33,6 @@ impl LeedorApp {
         utils::set_panic_hook();
         let document = document().ok_or("no document")?;
 
-        let content_div = document
-            .get_element_by_id("book-content")
-            .ok_or("no #book-content")?;
-        let shadow_root_init = ShadowRootInit::new(ShadowRootMode::Open);
-        content_div.attach_shadow(&shadow_root_init)?;
-
         let file_handler = Closure::wrap(self.handle_file_change());
         let file_input = document.get_element_by_id("file").ok_or("no #file")?;
         file_input
@@ -51,8 +45,39 @@ impl LeedorApp {
             .add_event_listener_with_callback("change", chapter_handler.as_ref().unchecked_ref())?;
         chapter_handler.forget();
 
+        let content_div = document
+            .get_element_by_id("book-content")
+            .ok_or("no #book-content")?;
+        content_div.attach_shadow(&ShadowRootInit::new(ShadowRootMode::Open))?;
+        let shadow_root = content_div.shadow_root().ok_or("no shadow root")?;
+        let click_handler = Closure::wrap(self.handle_click());
+        shadow_root
+            .add_event_listener_with_callback("click", click_handler.as_ref().unchecked_ref())?;
+        click_handler.forget();
+
         console::log_1(&"ready".into());
         Ok(())
+    }
+
+    fn handle_click(&self) -> Box<FnMut(Event) -> JsResult<()>> {
+        let epub_ref = self.epub.clone();
+        let handler = move |e: Event| -> JsResult<()> {
+            let target: Element = e.target().ok_or("no event target")?.dyn_into()?;
+            if target.tag_name() != "A" {
+                return Ok(());
+            }
+            e.prevent_default();
+            let href = match target.get_attribute("href") {
+                Some(s) => s,
+                None => return Ok(()),
+            };
+            let mut epub_option = epub_ref.borrow_mut();
+            let epub = epub_option.as_mut().ok_or("no epub loaded yet")?;
+            let content = epub.chapter_by_link(&href)?;
+            render_content(&content)?;
+            Ok(())
+        };
+        Box::new(handler)
     }
 
     fn handle_chapter_change(&self) -> Box<FnMut(Event) -> JsResult<()>> {
@@ -62,8 +87,8 @@ impl LeedorApp {
             let chapter_number: usize = target.value().parse().or(Err("not a valid number"))?;
             let mut epub_option = epub_ref.borrow_mut();
             let epub = epub_option.as_mut().ok_or("no epub loaded yet")?;
-            let first_chapter = epub.chapter(chapter_number.saturating_sub(1))?;
-            render_content(&first_chapter)?;
+            let content = epub.chapter(chapter_number.saturating_sub(1))?;
+            render_content(&content)?;
             Ok(())
         };
         Box::new(handler)

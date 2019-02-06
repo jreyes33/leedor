@@ -2,6 +2,7 @@ mod epub;
 mod error;
 mod utils;
 mod web;
+mod xml;
 
 use cfg_if::cfg_if;
 

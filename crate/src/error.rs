@@ -2,6 +2,7 @@ use std::convert::From;
 use std::fmt;
 use std::io;
 use std::string::FromUtf8Error;
+use url::ParseError;
 use wasm_bindgen::JsValue;
 use zip::result::ZipError;
 
@@ -13,6 +14,7 @@ pub enum Error {
     IoError(io::Error),
     MinidomError(minidom::Error),
     StringError(FromUtf8Error),
+    UrlError(ParseError),
     ZipError(ZipError),
 }
 
@@ -40,6 +42,12 @@ impl From<FromUtf8Error> for Error {
     }
 }
 
+impl From<ParseError> for Error {
+    fn from(err: ParseError) -> Error {
+        Error::UrlError(err)
+    }
+}
+
 impl From<ZipError> for Error {
     fn from(err: ZipError) -> Error {
         Error::ZipError(err)
@@ -60,6 +68,7 @@ impl fmt::Display for Error {
             Error::IoError(e) => format!("IoError: {}", e),
             Error::MinidomError(e) => format!("MinidomError: {}", e),
             Error::StringError(e) => format!("StringError: {}", e),
+            Error::UrlError(e) => format!("UrlError: {}", e),
             Error::ZipError(e) => format!("ZipError: {}", e),
         };
         write!(fmt, "{}", error_str)
