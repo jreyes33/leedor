@@ -1,14 +1,20 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta http-equiv="Content-type" content="text/html; charset=utf-8"/>
-    <title>My awesome Rust, WebAssembly, and Webpack application</title>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Leedor</title>
   </head>
   <body>
-    <input id="file" type="file" name="file">
-    <input id="chapter" type="number" name="chapter" value="1" min="1">
-    of <span id="doc-count">N/A</span>
-    <div id="book-content"></div>
+    <main>
+      <div class="toolbar">
+        <input id="file" type="file" name="file">
+        <input id="chapter" type="number" name="chapter" value="1" min="1">
+        of <span id="doc-count">N/A</span>
+      </div>
+      <div id="book-content" class="content"></div>
+    </main>
   </body>
 </html>
 
