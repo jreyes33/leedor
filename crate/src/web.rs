@@ -3,6 +3,7 @@ use crate::utils;
 use js_sys::{ArrayBuffer, Uint8Array};
 use std::cell::RefCell;
 use std::rc::Rc;
+use url::Url;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{
@@ -62,15 +63,25 @@ impl LeedorApp {
     fn handle_click(&self) -> Box<FnMut(Event) -> JsResult<()>> {
         let epub_ref = self.epub.clone();
         let handler = move |e: Event| -> JsResult<()> {
-            let target: Element = e.target().ok_or("no event target")?.dyn_into()?;
-            if target.tag_name() != "A" {
+            let clicked_elem: Element = e.target().ok_or("no event target")?.dyn_into()?;
+            let anchor;
+            if clicked_elem.tag_name() == "A" {
+                anchor = clicked_elem;
+            } else if let Some(c) = clicked_elem.closest("a")? {
+                anchor = c;
+            } else {
                 return Ok(());
             }
-            e.prevent_default();
-            let href = match target.get_attribute("href") {
+            let href = match anchor.get_attribute("href") {
                 Some(s) => s,
                 None => return Ok(()),
             };
+            // open external links in a new tab
+            if Url::parse(&href).is_ok() {
+                anchor.set_attribute("target", "_blank")?;
+                return Ok(());
+            }
+            e.prevent_default();
             let mut epub_option = epub_ref.borrow_mut();
             let epub = epub_option.as_mut().ok_or("no epub loaded yet")?;
             let content = epub.chapter_by_link(&href)?;
@@ -83,8 +94,8 @@ impl LeedorApp {
     fn handle_chapter_change(&self) -> Box<FnMut(Event) -> JsResult<()>> {
         let epub_ref = self.epub.clone();
         let handler = move |e: Event| -> JsResult<()> {
-            let target: HtmlInputElement = e.target().ok_or("no event target")?.dyn_into()?;
-            let chapter_number: usize = target.value().parse().or(Err("not a valid number"))?;
+            let input: HtmlInputElement = e.target().ok_or("no event target")?.dyn_into()?;
+            let chapter_number: usize = input.value().parse().or(Err("not a valid number"))?;
             let mut epub_option = epub_ref.borrow_mut();
             let epub = epub_option.as_mut().ok_or("no epub loaded yet")?;
             let content = epub.chapter(chapter_number.saturating_sub(1))?;
@@ -97,8 +108,8 @@ impl LeedorApp {
     fn handle_file_change(&self) -> Box<FnMut(Event) -> JsResult<()>> {
         let onload_rc = Rc::new(Closure::wrap(self.handle_file_load()));
         let handler = move |e: Event| -> JsResult<()> {
-            let target: HtmlInputElement = e.target().ok_or("no event target")?.dyn_into()?;
-            let file_list = target.files().ok_or("no files in target")?;
+            let input: HtmlInputElement = e.target().ok_or("no event target")?.dyn_into()?;
+            let file_list = input.files().ok_or("no files in input")?;
             let file = file_list.get(0).ok_or("no files")?;
             let reader = FileReader::new()?;
             let onload_handler = onload_rc.as_ref();
@@ -113,8 +124,8 @@ impl LeedorApp {
     fn handle_file_load(&self) -> Box<FnMut(Event) -> JsResult<()>> {
         let epub_ref = self.epub.clone();
         let handler = move |e: Event| -> JsResult<()> {
-            let target: FileReader = e.target().ok_or("no event target")?.dyn_into()?;
-            let contents_buf: ArrayBuffer = target.result()?.into();
+            let file_reader: FileReader = e.target().ok_or("no event target")?.dyn_into()?;
+            let contents_buf: ArrayBuffer = file_reader.result()?.into();
             let mut bytes = vec![0; contents_buf.byte_length() as usize];
             Uint8Array::new(&contents_buf).copy_to(&mut bytes);
             *epub_ref.borrow_mut() = Some(Epub::new(bytes)?);

@@ -178,7 +178,7 @@ impl Epub {
         let ncx_id = self
             .spine_node()?
             .attr("toc")
-            .expect("toc missing in spine");
+            .ok_or("toc missing in spine")?;
         let ncx_item = self
             .manifest
             .get(ncx_id)
@@ -190,6 +190,9 @@ impl Epub {
 
 fn resolve_path<'a>(path_str: &'a str, relative_to: &'a Path) -> PathBuf {
     let mut built_path = PathBuf::from(relative_to);
+    if path_str.is_empty() {
+        return built_path;
+    }
     built_path.pop(); // remove relative_to file name
     for segment in Path::new(path_str) {
         if segment == ".." {
