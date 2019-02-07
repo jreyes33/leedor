@@ -183,7 +183,7 @@ dependencies = [
  "url 1.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasm-bindgen 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "web-sys 0.3.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "wee_alloc 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wee_alloc 0.4.2 (git+https://github.com/rustwasm/wee_alloc)",
  "zip 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -540,7 +540,7 @@ dependencies = [
 [[package]]
 name = "wee_alloc"
 version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/rustwasm/wee_alloc#4b12054586ff8f9c61cbbcf66e14eec32704180a"
 dependencies = [
  "cfg-if 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.48 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -670,7 +670,7 @@ dependencies = [
 "checksum wasm-bindgen-shared 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)" = "9c406cd5b42c36db6f76f17d28bcd26187fd90cda686231f3d04de07a716fc3a"
 "checksum wasm-bindgen-webidl 0.2.27 (registry+https://github.com/rust-lang/crates.io-index)" = "068ab8c6b5682c5ac2aa7c2178ecdfc91143e3d62da458997ee1299c3fbf0e85"
 "checksum web-sys 0.3.10 (registry+https://github.com/rust-lang/crates.io-index)" = "53890ae11f09f4f08f8dc0d76d03cedfb4aa1f667b17ee1b9d6aa23b314cb940"
-"checksum wee_alloc 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "27875be1daf838fa18f3e94fd19fd12638e34615b42f56da2610c8f46be80cc6"
+"checksum wee_alloc 0.4.2 (git+https://github.com/rustwasm/wee_alloc)" = "<none>"
 "checksum weedle 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "26a4c67f132386d965390b8a734d5d10adbcd30eb5cc74bd9229af8b83f10044"
 "checksum winapi 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "92c1eb33641e276cfa214a0522acad57be5c56b10cb348b3c5117db75f3ac4b0"
 "checksum winapi-i686-pc-windows-gnu 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
