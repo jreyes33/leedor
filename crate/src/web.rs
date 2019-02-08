@@ -46,6 +46,20 @@ impl LeedorApp {
             .add_event_listener_with_callback("change", chapter_handler.as_ref().unchecked_ref())?;
         chapter_handler.forget();
 
+        let next_handler = Closure::wrap(self.handle_next());
+        document
+            .get_element_by_id("next")
+            .ok_or("no #next")?
+            .add_event_listener_with_callback("click", next_handler.as_ref().unchecked_ref())?;
+        next_handler.forget();
+
+        let prev_handler = Closure::wrap(self.handle_prev());
+        document
+            .get_element_by_id("prev")
+            .ok_or("no #prev")?
+            .add_event_listener_with_callback("click", prev_handler.as_ref().unchecked_ref())?;
+        prev_handler.forget();
+
         let content_div = document
             .get_element_by_id("book-content")
             .ok_or("no #book-content")?;
@@ -85,6 +99,44 @@ impl LeedorApp {
             let mut epub_option = epub_ref.borrow_mut();
             let epub = epub_option.as_mut().ok_or("no epub loaded yet")?;
             let content = epub.chapter_by_link(&href)?;
+            render_content(&content)?;
+            let url = utils::parse_relative_url(&href)?;
+            let fragment = match url.fragment() {
+                Some(s) => s,
+                None => return Ok(()),
+            };
+            let shadow_root = document()
+                .ok_or("no document")?
+                .get_element_by_id("book-content")
+                .ok_or("no #book-content")?
+                .shadow_root()
+                .ok_or("no shadow root")?;
+            if let Some(elem) = shadow_root.get_element_by_id(fragment) {
+                elem.scroll_into_view();
+            }
+            Ok(())
+        };
+        Box::new(handler)
+    }
+
+    fn handle_next(&self) -> Box<FnMut(Event) -> JsResult<()>> {
+        let epub_ref = self.epub.clone();
+        let handler = move |_| -> JsResult<()> {
+            let mut epub_option = epub_ref.borrow_mut();
+            let epub = epub_option.as_mut().ok_or("no epub loaded yet")?;
+            let content = epub.next_chapter()?;
+            render_content(&content)?;
+            Ok(())
+        };
+        Box::new(handler)
+    }
+
+    fn handle_prev(&self) -> Box<FnMut(Event) -> JsResult<()>> {
+        let epub_ref = self.epub.clone();
+        let handler = move |_| -> JsResult<()> {
+            let mut epub_option = epub_ref.borrow_mut();
+            let epub = epub_option.as_mut().ok_or("no epub loaded yet")?;
+            let content = epub.prev_chapter()?;
             render_content(&content)?;
             Ok(())
         };
@@ -128,8 +180,8 @@ impl LeedorApp {
             let contents_buf: ArrayBuffer = file_reader.result()?.into();
             let mut bytes = vec![0; contents_buf.byte_length() as usize];
             Uint8Array::new(&contents_buf).copy_to(&mut bytes);
-            *epub_ref.borrow_mut() = Some(Epub::new(bytes)?);
             let mut epub_option = epub_ref.borrow_mut();
+            *epub_option = Some(Epub::new(bytes)?);
             let epub = epub_option.as_mut().ok_or("no epub")?;
             let first_chapter = epub.chapter(0)?;
             render_count(epub.doc_count()?)?;
@@ -160,12 +212,12 @@ fn render_count(count: usize) -> JsResult<()> {
 }
 
 fn render_content(content: &str) -> JsResult<()> {
-    let root = document()
+    let content_div = document()
         .ok_or("no document")?
         .get_element_by_id("book-content")
-        .ok_or("no #book-content")?
-        .shadow_root()
-        .ok_or("no shadow root")?;
-    root.set_inner_html(content);
+        .ok_or("no #book-content")?;
+    let shadow_root = content_div.shadow_root().ok_or("no shadow root")?;
+    shadow_root.set_inner_html(content);
+    content_div.scroll_with_x_and_y(0.0, 0.0);
     Ok(())
 }

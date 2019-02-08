@@ -1,10 +1,10 @@
 use crate::error::Result;
+use crate::utils;
 use crate::xml::{parse_xml, Descend};
 use minidom::Element;
 use std::collections::HashMap;
 use std::io::{BufReader, Cursor, Read};
 use std::path::{Path, PathBuf};
-use url::Url;
 use zip::ZipArchive;
 
 type ItemId = String;
@@ -21,7 +21,6 @@ struct ManifestItem {
 
 #[derive(Debug)]
 pub struct Epub {
-    base_url: Url,
     current_path: PathBuf,
     manifest: Manifest,
     opf_doc: Element,
@@ -69,7 +68,6 @@ impl Epub {
             })
             .collect();
         Ok(Epub {
-            base_url: Url::parse("https://leedor.jreyes.org")?,
             current_path: opf_path.clone(),
             manifest,
             opf_doc,
@@ -91,10 +89,29 @@ impl Epub {
     }
 
     pub fn chapter_by_link(&mut self, link: &str) -> Result<String> {
-        let url = Url::options().base_url(Some(&self.base_url)).parse(link)?;
+        let url = utils::parse_relative_url(link)?;
         let path = &url.path()[1..]; // drop the slash
         self.current_path = resolve_path(path, &self.current_path);
         self.current_chapter()
+    }
+
+    pub fn next_chapter(&mut self) -> Result<String> {
+        self.chapter(self.current_idx()? + 1)
+    }
+
+    pub fn prev_chapter(&mut self) -> Result<String> {
+        self.chapter(self.current_idx()? - 1)
+    }
+
+    fn current_idx(&self) -> Result<usize> {
+        let idx = self
+            .spine()?
+            .iter()
+            .enumerate()
+            .find(|(_, item)| resolve_path(&item.href, &self.opf_path) == self.current_path)
+            .ok_or("could not find current_path in spine")?
+            .0;
+        Ok(idx)
     }
 
     fn current_chapter(&mut self) -> Result<String> {
@@ -246,6 +263,24 @@ mod tests {
             "@public@vhost@g@gutenberg@html@files@26964@26964-h@26964-h-2.htm.html#Footnote_1_1";
         let chapter_html = epub.chapter_by_link(link)?;
         assert!(chapter_html.contains("id=\"Footnote_1_1\""));
+        Ok(())
+    }
+
+    #[test]
+    fn next_chapter() -> Result<()> {
+        let mut epub = Epub::new(BYTES.clone())?;
+        let expected = epub.chapter(1)?.len();
+        epub.chapter(0)?;
+        assert_eq!(expected, epub.next_chapter()?.len());
+        Ok(())
+    }
+
+    #[test]
+    fn prev_chapter() -> Result<()> {
+        let mut epub = Epub::new(BYTES.clone())?;
+        let expected = epub.chapter(0)?.len();
+        epub.chapter(1)?;
+        assert_eq!(expected, epub.prev_chapter()?.len());
         Ok(())
     }
 }
