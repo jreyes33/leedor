@@ -41,6 +41,7 @@ features = ["deflate", "time"]
 version = "0.3.10"
 features = [
   "Blob",
+  "CssStyleDeclaration",
   "Document",
   "Element",
   "Event",

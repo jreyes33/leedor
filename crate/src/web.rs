@@ -2,6 +2,7 @@ use crate::epub::Epub;
 use crate::utils;
 use js_sys::{ArrayBuffer, Uint8Array};
 use std::cell::RefCell;
+use std::cmp::{max, min};
 use std::rc::Rc;
 use url::Url;
 use wasm_bindgen::prelude::*;
@@ -11,8 +12,17 @@ use web_sys::{
     ShadowRootInit, ShadowRootMode,
 };
 
+const FONT_SIZE_DEFAULT: isize = 20;
+const FONT_SIZE_INCREMENT: isize = 2;
+const FONT_SIZE_MIN: isize = 6;
+const FONT_SIZE_MAX: isize = 60;
 type JsResult<T> = std::result::Result<T, JsValue>;
 type EventHandler = Box<FnMut(Event) -> JsResult<()>>;
+
+enum Cmp {
+    More,
+    Less,
+}
 
 #[wasm_bindgen]
 pub fn run() -> JsResult<()> {
@@ -38,12 +48,16 @@ impl LeedorApp {
         let chapter_input = document.get_element_by_id("chapter").ok_or("no #chapter")?;
         let next_button = document.get_element_by_id("next").ok_or("no #next")?;
         let prev_button = document.get_element_by_id("prev").ok_or("no #prev")?;
+        let smaller_button = document.get_element_by_id("smaller").ok_or("no #smaller")?;
+        let larger_button = document.get_element_by_id("larger").ok_or("no #larger")?;
         let content = document.get_element_by_id("content").ok_or("no #content")?;
         let shadow_root = content.attach_shadow(&ShadowRootInit::new(ShadowRootMode::Open))?;
         add_event_listener(file_input, "change", self.handle_file_change())?;
         add_event_listener(chapter_input, "change", self.handle_chapter_change())?;
-        add_event_listener(next_button, "click", self.handle_next())?;
-        add_event_listener(prev_button, "click", self.handle_prev())?;
+        add_event_listener(prev_button, "click", self.handle_arrows(Cmp::Less))?;
+        add_event_listener(next_button, "click", self.handle_arrows(Cmp::More))?;
+        add_event_listener(smaller_button, "click", self.handle_font(Cmp::Less))?;
+        add_event_listener(larger_button, "click", self.handle_font(Cmp::More))?;
         add_event_listener(shadow_root, "click", self.handle_click())?;
         console::log_1(&"ready".into());
         Ok(())
@@ -94,25 +108,39 @@ impl LeedorApp {
         Box::new(handler)
     }
 
-    fn handle_next(&self) -> EventHandler {
+    fn handle_arrows(&self, cmp: Cmp) -> EventHandler {
         let epub_ref = self.epub.clone();
         let handler = move |_| -> JsResult<()> {
             let mut epub_option = epub_ref.borrow_mut();
             let epub = epub_option.as_mut().ok_or("no epub loaded yet")?;
-            let content = epub.next_chapter()?;
+            let content = match cmp {
+                Cmp::Less => epub.prev_chapter()?,
+                Cmp::More => epub.next_chapter()?,
+            };
             render_content(&content)?;
             Ok(())
         };
         Box::new(handler)
     }
 
-    fn handle_prev(&self) -> EventHandler {
-        let epub_ref = self.epub.clone();
+    fn handle_font(&self, cmp: Cmp) -> EventHandler {
         let handler = move |_| -> JsResult<()> {
-            let mut epub_option = epub_ref.borrow_mut();
-            let epub = epub_option.as_mut().ok_or("no epub loaded yet")?;
-            let content = epub.prev_chapter()?;
-            render_content(&content)?;
+            let elem: HtmlElement = document()
+                .ok_or("no document")?
+                .get_element_by_id("content")
+                .ok_or("no #content")?
+                .dyn_into()?;
+            let style = elem.style();
+            let str_val = style.get_property_value("font-size")?;
+            let old_val = str_val[0..str_val.len().saturating_sub(2)]
+                .parse()
+                .unwrap_or(FONT_SIZE_DEFAULT);
+            let delta = match cmp {
+                Cmp::Less => -FONT_SIZE_INCREMENT,
+                Cmp::More => FONT_SIZE_INCREMENT,
+            };
+            let new_val = min(max(old_val + delta, FONT_SIZE_MIN), FONT_SIZE_MAX);
+            style.set_property("font-size", &format!("{}px", new_val))?;
             Ok(())
         };
         Box::new(handler)
