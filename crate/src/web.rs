@@ -7,11 +7,12 @@ use url::Url;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{
-    console, Document, Element, Event, FileReader, HtmlElement, HtmlInputElement, ShadowRootInit,
-    ShadowRootMode,
+    console, Document, Element, Event, EventTarget, FileReader, HtmlElement, HtmlInputElement,
+    ShadowRootInit, ShadowRootMode,
 };
 
 type JsResult<T> = std::result::Result<T, JsValue>;
+type EventHandler = Box<FnMut(Event) -> JsResult<()>>;
 
 #[wasm_bindgen]
 pub fn run() -> JsResult<()> {
@@ -33,48 +34,22 @@ impl LeedorApp {
     pub fn run(&self) -> JsResult<()> {
         utils::set_panic_hook();
         let document = document().ok_or("no document")?;
-
-        let file_handler = Closure::wrap(self.handle_file_change());
         let file_input = document.get_element_by_id("file").ok_or("no #file")?;
-        file_input
-            .add_event_listener_with_callback("change", file_handler.as_ref().unchecked_ref())?;
-        file_handler.forget();
-
-        let chapter_handler = Closure::wrap(self.handle_chapter_change());
         let chapter_input = document.get_element_by_id("chapter").ok_or("no #chapter")?;
-        chapter_input
-            .add_event_listener_with_callback("change", chapter_handler.as_ref().unchecked_ref())?;
-        chapter_handler.forget();
-
-        let next_handler = Closure::wrap(self.handle_next());
-        document
-            .get_element_by_id("next")
-            .ok_or("no #next")?
-            .add_event_listener_with_callback("click", next_handler.as_ref().unchecked_ref())?;
-        next_handler.forget();
-
-        let prev_handler = Closure::wrap(self.handle_prev());
-        document
-            .get_element_by_id("prev")
-            .ok_or("no #prev")?
-            .add_event_listener_with_callback("click", prev_handler.as_ref().unchecked_ref())?;
-        prev_handler.forget();
-
-        let content_div = document
-            .get_element_by_id("book-content")
-            .ok_or("no #book-content")?;
-        content_div.attach_shadow(&ShadowRootInit::new(ShadowRootMode::Open))?;
-        let shadow_root = content_div.shadow_root().ok_or("no shadow root")?;
-        let click_handler = Closure::wrap(self.handle_click());
-        shadow_root
-            .add_event_listener_with_callback("click", click_handler.as_ref().unchecked_ref())?;
-        click_handler.forget();
-
+        let next_button = document.get_element_by_id("next").ok_or("no #next")?;
+        let prev_button = document.get_element_by_id("prev").ok_or("no #prev")?;
+        let content = document.get_element_by_id("content").ok_or("no #content")?;
+        let shadow_root = content.attach_shadow(&ShadowRootInit::new(ShadowRootMode::Open))?;
+        add_event_listener(file_input, "change", self.handle_file_change())?;
+        add_event_listener(chapter_input, "change", self.handle_chapter_change())?;
+        add_event_listener(next_button, "click", self.handle_next())?;
+        add_event_listener(prev_button, "click", self.handle_prev())?;
+        add_event_listener(shadow_root, "click", self.handle_click())?;
         console::log_1(&"ready".into());
         Ok(())
     }
 
-    fn handle_click(&self) -> Box<FnMut(Event) -> JsResult<()>> {
+    fn handle_click(&self) -> EventHandler {
         let epub_ref = self.epub.clone();
         let handler = move |e: Event| -> JsResult<()> {
             let clicked_elem: Element = e.target().ok_or("no event target")?.dyn_into()?;
@@ -107,8 +82,8 @@ impl LeedorApp {
             };
             let shadow_root = document()
                 .ok_or("no document")?
-                .get_element_by_id("book-content")
-                .ok_or("no #book-content")?
+                .get_element_by_id("content")
+                .ok_or("no #content")?
                 .shadow_root()
                 .ok_or("no shadow root")?;
             if let Some(elem) = shadow_root.get_element_by_id(fragment) {
@@ -119,7 +94,7 @@ impl LeedorApp {
         Box::new(handler)
     }
 
-    fn handle_next(&self) -> Box<FnMut(Event) -> JsResult<()>> {
+    fn handle_next(&self) -> EventHandler {
         let epub_ref = self.epub.clone();
         let handler = move |_| -> JsResult<()> {
             let mut epub_option = epub_ref.borrow_mut();
@@ -131,7 +106,7 @@ impl LeedorApp {
         Box::new(handler)
     }
 
-    fn handle_prev(&self) -> Box<FnMut(Event) -> JsResult<()>> {
+    fn handle_prev(&self) -> EventHandler {
         let epub_ref = self.epub.clone();
         let handler = move |_| -> JsResult<()> {
             let mut epub_option = epub_ref.borrow_mut();
@@ -143,7 +118,7 @@ impl LeedorApp {
         Box::new(handler)
     }
 
-    fn handle_chapter_change(&self) -> Box<FnMut(Event) -> JsResult<()>> {
+    fn handle_chapter_change(&self) -> EventHandler {
         let epub_ref = self.epub.clone();
         let handler = move |e: Event| -> JsResult<()> {
             let input: HtmlInputElement = e.target().ok_or("no event target")?.dyn_into()?;
@@ -157,7 +132,7 @@ impl LeedorApp {
         Box::new(handler)
     }
 
-    fn handle_file_change(&self) -> Box<FnMut(Event) -> JsResult<()>> {
+    fn handle_file_change(&self) -> EventHandler {
         let onload_rc = Rc::new(Closure::wrap(self.handle_file_load()));
         let handler = move |e: Event| -> JsResult<()> {
             let input: HtmlInputElement = e.target().ok_or("no event target")?.dyn_into()?;
@@ -173,7 +148,7 @@ impl LeedorApp {
     }
 
     // TODO: fix memory leaks when loading new epubs.
-    fn handle_file_load(&self) -> Box<FnMut(Event) -> JsResult<()>> {
+    fn handle_file_load(&self) -> EventHandler {
         let epub_ref = self.epub.clone();
         let handler = move |e: Event| -> JsResult<()> {
             let file_reader: FileReader = e.target().ok_or("no event target")?.dyn_into()?;
@@ -201,6 +176,17 @@ fn document() -> Option<Document> {
     None
 }
 
+fn add_event_listener<T>(target: T, event: &str, handler: EventHandler) -> JsResult<()>
+where
+    T: Into<EventTarget>,
+{
+    let handler_cl = Closure::wrap(handler);
+    let event_target = target.into();
+    event_target.add_event_listener_with_callback(event, handler_cl.as_ref().unchecked_ref())?;
+    handler_cl.forget();
+    Ok(())
+}
+
 fn render_count(count: usize) -> JsResult<()> {
     let count_div: HtmlElement = document()
         .ok_or("no document")?
@@ -214,8 +200,8 @@ fn render_count(count: usize) -> JsResult<()> {
 fn render_content(content: &str) -> JsResult<()> {
     let content_div = document()
         .ok_or("no document")?
-        .get_element_by_id("book-content")
-        .ok_or("no #book-content")?;
+        .get_element_by_id("content")
+        .ok_or("no #content")?;
     let shadow_root = content_div.shadow_root().ok_or("no shadow root")?;
     shadow_root.set_inner_html(content);
     content_div.scroll_with_x_and_y(0.0, 0.0);
