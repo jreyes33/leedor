@@ -1,4 +1,4 @@
-use crate::epub::Epub;
+use crate::epub::{Epub, TocItem};
 use crate::utils;
 use js_sys::{ArrayBuffer, Uint8Array};
 use std::cell::RefCell;
@@ -46,10 +46,11 @@ impl LeedorApp {
         let document = document().ok_or("no document")?;
         let file_input = document.get_element_by_id("file").ok_or("no #file")?;
         let chapter_input = document.get_element_by_id("chapter").ok_or("no #chapter")?;
-        let next_button = document.get_element_by_id("next").ok_or("no #next")?;
         let prev_button = document.get_element_by_id("prev").ok_or("no #prev")?;
+        let next_button = document.get_element_by_id("next").ok_or("no #next")?;
         let smaller_button = document.get_element_by_id("smaller").ok_or("no #smaller")?;
         let larger_button = document.get_element_by_id("larger").ok_or("no #larger")?;
+        let toc = document.get_element_by_id("toc").ok_or("no #toc")?;
         let content = document.get_element_by_id("content").ok_or("no #content")?;
         let shadow_root = content.attach_shadow(&ShadowRootInit::new(ShadowRootMode::Open))?;
         add_event_listener(file_input, "change", self.handle_file_change())?;
@@ -58,12 +59,13 @@ impl LeedorApp {
         add_event_listener(next_button, "click", self.handle_arrows(Cmp::More))?;
         add_event_listener(smaller_button, "click", self.handle_font(Cmp::Less))?;
         add_event_listener(larger_button, "click", self.handle_font(Cmp::More))?;
-        add_event_listener(shadow_root, "click", self.handle_click())?;
+        add_event_listener(toc, "click", self.handle_click(true))?;
+        add_event_listener(shadow_root, "click", self.handle_click(false))?;
         console::log_1(&"ready".into());
         Ok(())
     }
 
-    fn handle_click(&self) -> EventHandler {
+    fn handle_click(&self, is_toc: bool) -> EventHandler {
         let epub_ref = self.epub.clone();
         let handler = move |e: Event| -> JsResult<()> {
             let clicked_elem: Element = e.target().ok_or("no event target")?.dyn_into()?;
@@ -87,7 +89,11 @@ impl LeedorApp {
             e.prevent_default();
             let mut epub_option = epub_ref.borrow_mut();
             let epub = epub_option.as_mut().ok_or("no epub loaded yet")?;
-            let content = epub.chapter_by_link(&href)?;
+            let content = if is_toc {
+                epub.chapter_by_toc_link(&href)?
+            } else {
+                epub.chapter_by_link(&href)?
+            };
             render_content(&content)?;
             let url = utils::parse_relative_url(&href)?;
             let fragment = match url.fragment() {
@@ -188,6 +194,7 @@ impl LeedorApp {
             let epub = epub_option.as_mut().ok_or("no epub")?;
             let first_chapter = epub.chapter(0)?;
             render_count(epub.doc_count()?)?;
+            render_toc(&epub.toc()?)?;
             render_content(&first_chapter)?;
             Ok(())
         };
@@ -222,6 +229,21 @@ fn render_count(count: usize) -> JsResult<()> {
         .ok_or("no #doc-count")?
         .dyn_into()?;
     count_div.set_inner_text(&count.to_string());
+    Ok(())
+}
+
+fn render_toc(toc: &[TocItem]) -> JsResult<()> {
+    let document = document().ok_or("no document")?;
+    let ul = document.get_element_by_id("toc").ok_or("no #toc")?;
+    ul.set_inner_html("");
+    for item in toc {
+        let li = document.create_element("li")?;
+        let anchor: HtmlElement = document.create_element("a")?.dyn_into()?;
+        anchor.set_attribute("href", &item.href)?;
+        anchor.set_inner_text(&item.text);
+        li.append_child(&anchor)?;
+        ul.append_child(&li)?;
+    }
     Ok(())
 }
 

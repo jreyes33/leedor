@@ -8,9 +8,10 @@ use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 
 type ItemId = String;
-type Spine<'a> = Vec<&'a ManifestItem>;
+type Spine = Vec<String>;
 type Zip = ZipArchive<Cursor<Vec<u8>>>;
 type Manifest = HashMap<ItemId, ManifestItem>;
+type Toc = Vec<TocItem>;
 
 #[derive(Debug)]
 struct ManifestItem {
@@ -20,11 +21,19 @@ struct ManifestItem {
 }
 
 #[derive(Debug)]
+pub struct TocItem {
+    pub text: String,
+    pub href: String,
+}
+
+#[derive(Debug)]
 pub struct Epub {
     current_path: PathBuf,
     manifest: Manifest,
     opf_doc: Element,
     opf_path: PathBuf,
+    spine: Spine,
+    toc_path: PathBuf,
     zip: Zip,
 }
 
@@ -67,32 +76,47 @@ impl Epub {
                 )
             })
             .collect();
+        let spine_node = opf_doc
+            .children()
+            .find(|n| n.name() == "spine")
+            .ok_or("spine element missing in OPF")?;
+        let spine = spine_node
+            .children()
+            .filter(|c| c.name() == "itemref")
+            .map(|i| i.attr("idref").expect("idref missing in item").to_string())
+            .collect();
+        let toc_id = spine_node.attr("toc").ok_or("toc missing in spine")?;
+        let toc_item = manifest
+            .get(toc_id)
+            .ok_or("toc in spine not defined in manifest")?;
+        let toc_path = resolve_path(&toc_item.href, &opf_path);
         Ok(Epub {
             current_path: opf_path.clone(),
             manifest,
             opf_doc,
             opf_path,
+            spine,
+            toc_path,
             zip,
         })
     }
 
     pub fn doc_count(&self) -> Result<usize> {
-        let spine = self.spine()?;
-        Ok(spine.len())
+        Ok(self.spine.len())
     }
 
     pub fn chapter(&mut self, item_idx: usize) -> Result<String> {
-        let spine = self.spine()?;
-        let item = spine.get(item_idx).ok_or("item_idx not in spine")?;
-        self.current_path = resolve_path(&item.href, &self.opf_path);
-        self.current_chapter()
+        let idref = self.spine.get(item_idx).ok_or("item_idx not in spine")?;
+        let item = self.manifest.get(idref).ok_or("idref not in manifest")?;
+        self.current_chapter(&item.href.clone(), &self.opf_path.clone())
     }
 
     pub fn chapter_by_link(&mut self, link: &str) -> Result<String> {
-        let url = utils::parse_relative_url(link)?;
-        let path = &url.path()[1..]; // drop the slash
-        self.current_path = resolve_path(path, &self.current_path);
-        self.current_chapter()
+        self.current_chapter(link, &self.current_path.clone())
+    }
+
+    pub fn chapter_by_toc_link(&mut self, link: &str) -> Result<String> {
+        self.current_chapter(link, &self.toc_path.clone())
     }
 
     pub fn next_chapter(&mut self) -> Result<String> {
@@ -103,18 +127,45 @@ impl Epub {
         self.chapter(self.current_idx()? - 1)
     }
 
+    // TODO: support recursive navPoints?
+    // TODO: the NCX file is superseded and marked for removal in EPUB 3.
+    pub fn toc(&mut self) -> Result<Toc> {
+        let path_str = self.toc_path.to_str().ok_or("invalid path")?;
+        let ncx_doc = parse_xml(self.zip.by_name(path_str)?)?;
+        let ncx_ns = ncx_doc.ns().unwrap_or_default();
+        let nav_map = ncx_doc.get_child("navMap", &ncx_ns).ok_or("no navMap")?;
+        let mut toc = vec![];
+        for nav_point in nav_map.children() {
+            let content = nav_point
+                .get_child("content", &ncx_ns)
+                .ok_or("no content")?;
+            let nav_label = nav_point
+                .get_child("navLabel", &ncx_ns)
+                .ok_or("no navLabel")?;
+            let text_elem = nav_label.get_child("text", &ncx_ns).ok_or("no text")?;
+            let text = text_elem.text().trim().to_string();
+            let href = content.attr("src").ok_or("no src in content")?.to_string();
+            toc.push(TocItem { text, href });
+        }
+        Ok(toc)
+    }
+
     fn current_idx(&self) -> Result<usize> {
         let idx = self
-            .spine()?
+            .spine
             .iter()
             .enumerate()
+            .map(|(i, idref)| (i, self.manifest.get(idref).expect("idref not in manifest")))
             .find(|(_, item)| resolve_path(&item.href, &self.opf_path) == self.current_path)
             .ok_or("could not find current_path in spine")?
             .0;
         Ok(idx)
     }
 
-    fn current_chapter(&mut self) -> Result<String> {
+    fn current_chapter(&mut self, href: &str, relative_to: &Path) -> Result<String> {
+        let url = utils::parse_relative_url(href)?;
+        let path = &url.path()[1..]; // drop the slash
+        self.current_path = resolve_path(path, relative_to);
         let path_str = self.current_path.to_str().ok_or("invalid path")?;
         let doc_file = self.zip.by_name(path_str)?;
         let mut doc = parse_xml(doc_file)?;
@@ -162,46 +213,6 @@ impl Epub {
             return Some(&item.media_type);
         }
         None
-    }
-
-    // TODO: memoize spine.
-    fn spine(&self) -> Result<Spine> {
-        let spine = self
-            .spine_node()?
-            .children()
-            .filter(|c| c.name() == "itemref")
-            .map(|i| {
-                let idref = i.attr("idref").expect("idref missing in item");
-                self.manifest
-                    .get(idref)
-                    .expect("idref in spine not defined in manifest")
-            })
-            .collect();
-        Ok(spine)
-    }
-
-    fn spine_node(&self) -> Result<&Element> {
-        let spine_node = self
-            .opf_doc
-            .children()
-            .find(|n| n.name() == "spine")
-            .ok_or("spine element missing in OPF")?;
-        Ok(spine_node)
-    }
-
-    // TODO: the NCX file is superseded and marked for removal in EPUB 3.
-    #[allow(dead_code)]
-    fn ncx_doc(&mut self) -> Result<Element> {
-        let ncx_id = self
-            .spine_node()?
-            .attr("toc")
-            .ok_or("toc missing in spine")?;
-        let ncx_item = self
-            .manifest
-            .get(ncx_id)
-            .ok_or("toc in spine not defined in manifest")?;
-        let ncx_doc = parse_xml(self.zip.by_name(&ncx_item.href)?)?;
-        Ok(ncx_doc)
     }
 }
 
@@ -267,6 +278,16 @@ mod tests {
     }
 
     #[test]
+    fn read_chapter_by_toc_link() -> Result<()> {
+        let mut epub = Epub::new(BYTES.clone())?;
+        let link =
+            "@public@vhost@g@gutenberg@html@files@26964@26964-h@26964-h-2.htm.html#pgepubid00006";
+        let chapter_html = epub.chapter_by_toc_link(link)?;
+        assert!(chapter_html.contains("id=\"pgepubid00006\""));
+        Ok(())
+    }
+
+    #[test]
     fn next_chapter() -> Result<()> {
         let mut epub = Epub::new(BYTES.clone())?;
         let expected = epub.chapter(1)?.len();
@@ -281,6 +302,14 @@ mod tests {
         let expected = epub.chapter(0)?.len();
         epub.chapter(1)?;
         assert_eq!(expected, epub.prev_chapter()?.len());
+        Ok(())
+    }
+
+    #[test]
+    fn toc_epub2() -> Result<()> {
+        let mut epub = Epub::new(BYTES.clone())?;
+        let toc = epub.toc()?;
+        assert_eq!(7, toc.len());
         Ok(())
     }
 }
