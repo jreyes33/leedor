@@ -3,6 +3,7 @@ const dist = path.resolve(__dirname, "dist")
 const crate = path.resolve(__dirname, "crate")
 const HtmlWebpackPlugin = require("html-webpack-plugin")
 const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin")
+const webpack = require("webpack")
 
 module.exports = {
   entry: "./js/index.js",
@@ -12,6 +13,7 @@ module.exports = {
   },
   devServer: {
     contentBase: dist,
+    hot: true,
   },
   plugins: [
     new HtmlWebpackPlugin({
@@ -21,6 +23,7 @@ module.exports = {
     new WasmPackPlugin({
       crateDirectory: crate,
     }),
+    new webpack.HotModuleReplacementPlugin(),
   ],
   module: {
     rules: [
