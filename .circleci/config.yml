@@ -1,0 +1,16 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/rust:1.33.0-stretch-node
+    working_directory: ~/leedor/crate
+    steps:
+      - checkout:
+          path: ~/leedor
+      - run: rustup component add rustfmt clippy
+      - run: cargo fmt -- --check
+      - run: cargo clippy -- --forbid warnings
+      - run: cargo test
+      - run: npm ci
+      - run: npm run build
+      - run: ls -l ~/leedor/dist
