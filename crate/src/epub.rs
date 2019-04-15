@@ -120,11 +120,11 @@ impl Epub {
     }
 
     pub fn next_chapter(&mut self) -> Result<String> {
-        self.chapter(self.current_idx()? + 1)
+        self.chapter(self.current_idx()?.saturating_add(1))
     }
 
     pub fn prev_chapter(&mut self) -> Result<String> {
-        self.chapter(self.current_idx()? - 1)
+        self.chapter(self.current_idx()?.saturating_sub(1))
     }
 
     // TODO: support recursive navPoints?
@@ -301,6 +301,15 @@ mod tests {
         let mut epub = Epub::new(BYTES.clone())?;
         let expected = epub.chapter(0)?.len();
         epub.chapter(1)?;
+        assert_eq!(expected, epub.prev_chapter()?.len());
+        Ok(())
+    }
+
+    #[test]
+    fn prev_chapter_from_first_chapter() -> Result<()> {
+        let mut epub = Epub::new(BYTES.clone())?;
+        let expected = epub.chapter(0)?.len();
+        epub.chapter(0)?;
         assert_eq!(expected, epub.prev_chapter()?.len());
         Ok(())
     }
