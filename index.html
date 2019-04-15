@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Leedor</title>
+  </head>
+  <body>
+    <main>
+      <div class="toolbar">
+        <input id="file" type="file" name="file">
+        <input id="chapter" type="number" name="chapter" value="1" min="1">
+        of <span id="doc-count">N/A</span>
+        <button id="prev">‹</button>
+        <button id="next">›</button>
+        <button id="smaller">-</button>
+        <button id="larger">+</button>
+      </div>
+      <div id="content" class="content"></div>
+      <nav class="toc-nav">
+        <ul id="toc" class="toc"></ul>
+      </nav>
+    </main>
+  </body>
+</html>
+
