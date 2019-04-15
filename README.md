@@ -1,5 +1,7 @@
 # leedor
 
+[![CircleCI](https://circleci.com/gh/jreyes33/leedor.svg?style=svg)](https://circleci.com/gh/jreyes33/leedor)
+
 EPUB reader.
 
 ## License
