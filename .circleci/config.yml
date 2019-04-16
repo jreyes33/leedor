@@ -14,7 +14,6 @@ jobs:
       - run: cargo test
       - run: npm ci
       - run: npm run build
-      - run: ls -l ~/leedor/dist
       - persist_to_workspace:
           root: ~/leedor
           paths: dist
@@ -27,6 +26,7 @@ jobs:
       - add_ssh_keys:
           fingerprints:
             - "33:99:26:89:60:ca:b0:f0:4d:ee:f6:fa:24:89:3f:4c"
+      - checkout
       - run: |
           git config user.email "j+leedor-ci@jreyes.org"
           git config user.name "Leedor CI"
