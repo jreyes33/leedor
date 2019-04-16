@@ -1,4 +1,5 @@
 version: 2
+
 jobs:
   build:
     docker:
@@ -14,3 +15,36 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: ls -l ~/leedor/dist
+      - persist_to_workspace:
+          root: ~/leedor
+          paths: dist
+  deploy:
+    docker:
+      - image: alpine/git:latest
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - add_ssh_keys:
+          fingerprints:
+            - "33:99:26:89:60:ca:b0:f0:4d:ee:f6:fa:24:89:3f:4c"
+      - run: |
+          git config user.email "j+leedor-ci@jreyes.org"
+          git config user.name "Leedor CI"
+          git worktree add gh-pages-worktree gh-pages
+          cp -r /tmp/workspace/dist/* gh-pages-worktree
+          cd gh-pages-worktree
+          git add --all
+          git commit -m "[skip ci] Deploy $CIRCLE_SHA1"
+          git push origin gh-pages
+
+workflows:
+  version: 2
+  workflow:
+    jobs:
+      - build
+      - deploy:
+          requires:
+            - build
+          filters:
+            branches:
+              only: master

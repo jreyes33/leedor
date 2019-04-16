@@ -1,5 +1,6 @@
 .cache
 dist
+gh-pages-worktree
 node_modules
 crate/bin
 crate/pkg
