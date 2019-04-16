@@ -8,7 +8,7 @@ use url::Url;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{
-    console, Document, Element, Event, EventTarget, FileReader, HtmlElement, HtmlInputElement,
+    Document, Element, Event, EventTarget, FileReader, HtmlElement, HtmlInputElement,
     ShadowRootInit, ShadowRootMode,
 };
 
