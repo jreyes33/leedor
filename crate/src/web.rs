@@ -61,7 +61,6 @@ impl LeedorApp {
         add_event_listener(larger_button, "click", self.handle_font(Cmp::More))?;
         add_event_listener(toc, "click", self.handle_click(true))?;
         add_event_listener(shadow_root, "click", self.handle_click(false))?;
-        console::log_1(&"ready".into());
         Ok(())
     }
 
