@@ -31,8 +31,9 @@ jobs:
           git config user.email "j+leedor-ci@jreyes.org"
           git config user.name "Leedor CI"
           git worktree add gh-pages-worktree gh-pages
-          cp -r /tmp/workspace/dist/* gh-pages-worktree
           cd gh-pages-worktree
+          git rm -rf .
+          cp -r /tmp/workspace/dist/* .
           git add --all
           git commit -m "[skip ci] Deploy $CIRCLE_SHA1"
           git push origin gh-pages
