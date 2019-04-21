@@ -43,9 +43,8 @@ impl LeedorApp {
 
     pub fn run(&self) -> JsResult<()> {
         utils::set_panic_hook();
-        let document = document().ok_or("no document")?;
+        let document = document()?;
         let file_input = document.get_element_by_id("file").ok_or("no #file")?;
-        let chapter_input = document.get_element_by_id("chapter").ok_or("no #chapter")?;
         let prev_button = document.get_element_by_id("prev").ok_or("no #prev")?;
         let next_button = document.get_element_by_id("next").ok_or("no #next")?;
         let smaller_button = document.get_element_by_id("smaller").ok_or("no #smaller")?;
@@ -54,7 +53,6 @@ impl LeedorApp {
         let content = document.get_element_by_id("content").ok_or("no #content")?;
         let shadow_root = content.attach_shadow(&ShadowRootInit::new(ShadowRootMode::Open))?;
         add_event_listener(file_input, "change", self.handle_file_change())?;
-        add_event_listener(chapter_input, "change", self.handle_chapter_change())?;
         add_event_listener(prev_button, "click", self.handle_arrows(Cmp::Less))?;
         add_event_listener(next_button, "click", self.handle_arrows(Cmp::More))?;
         add_event_listener(smaller_button, "click", self.handle_font(Cmp::Less))?;
@@ -99,8 +97,7 @@ impl LeedorApp {
                 Some(s) => s,
                 None => return Ok(()),
             };
-            let shadow_root = document()
-                .ok_or("no document")?
+            let shadow_root = document()?
                 .get_element_by_id("content")
                 .ok_or("no #content")?
                 .shadow_root()
@@ -130,8 +127,7 @@ impl LeedorApp {
 
     fn handle_font(&self, cmp: Cmp) -> EventHandler {
         let handler = move |_| -> JsResult<()> {
-            let elem: HtmlElement = document()
-                .ok_or("no document")?
+            let elem: HtmlElement = document()?
                 .get_element_by_id("content")
                 .ok_or("no #content")?
                 .dyn_into()?;
@@ -146,20 +142,6 @@ impl LeedorApp {
             };
             let new_val = min(max(old_val + delta, FONT_SIZE_MIN), FONT_SIZE_MAX);
             style.set_property("font-size", &format!("{}px", new_val))?;
-            Ok(())
-        };
-        Box::new(handler)
-    }
-
-    fn handle_chapter_change(&self) -> EventHandler {
-        let epub_ref = self.epub.clone();
-        let handler = move |e: Event| -> JsResult<()> {
-            let input: HtmlInputElement = e.target().ok_or("no event target")?.dyn_into()?;
-            let chapter_number: usize = input.value().parse().or(Err("not a valid number"))?;
-            let mut epub_option = epub_ref.borrow_mut();
-            let epub = epub_option.as_mut().ok_or("no epub loaded yet")?;
-            let content = epub.chapter(chapter_number.saturating_sub(1))?;
-            render_content(&content)?;
             Ok(())
         };
         Box::new(handler)
@@ -192,7 +174,6 @@ impl LeedorApp {
             *epub_option = Some(Epub::new(bytes)?);
             let epub = epub_option.as_mut().ok_or("no epub")?;
             let first_chapter = epub.chapter(0)?;
-            render_count(epub.doc_count()?)?;
             render_toc(&epub.toc()?)?;
             render_content(&first_chapter)?;
             Ok(())
@@ -201,13 +182,13 @@ impl LeedorApp {
     }
 }
 
-fn document() -> Option<Document> {
+fn document() -> JsResult<Document> {
     if let Some(window) = web_sys::window() {
         if let Some(document) = window.document() {
-            return Some(document);
+            return Ok(document);
         }
     }
-    None
+    Err(JsValue::from_str("no document"))
 }
 
 fn add_event_listener<T>(target: T, event: &str, handler: EventHandler) -> JsResult<()>
@@ -221,18 +202,8 @@ where
     Ok(())
 }
 
-fn render_count(count: usize) -> JsResult<()> {
-    let count_div: HtmlElement = document()
-        .ok_or("no document")?
-        .get_element_by_id("doc-count")
-        .ok_or("no #doc-count")?
-        .dyn_into()?;
-    count_div.set_inner_text(&count.to_string());
-    Ok(())
-}
-
 fn render_toc(toc: &[TocItem]) -> JsResult<()> {
-    let document = document().ok_or("no document")?;
+    let document = document()?;
     let ul = document.get_element_by_id("toc").ok_or("no #toc")?;
     ul.set_inner_html("");
     for item in toc {
@@ -247,8 +218,7 @@ fn render_toc(toc: &[TocItem]) -> JsResult<()> {
 }
 
 fn render_content(content: &str) -> JsResult<()> {
-    let content_div = document()
-        .ok_or("no document")?
+    let content_div = document()?
         .get_element_by_id("content")
         .ok_or("no #content")?;
     let shadow_root = content_div.shadow_root().ok_or("no shadow root")?;

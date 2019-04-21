@@ -101,6 +101,7 @@ impl Epub {
         })
     }
 
+    #[allow(dead_code)]
     pub fn doc_count(&self) -> Result<usize> {
         Ok(self.spine.len())
     }
