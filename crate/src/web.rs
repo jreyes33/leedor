@@ -18,6 +18,7 @@ const FONT_SIZE_DEFAULT: isize = 20;
 const FONT_SIZE_INCREMENT: isize = 2;
 const FONT_SIZE_MIN: isize = 6;
 const FONT_SIZE_MAX: isize = 60;
+type EpubRef = Rc<RefCell<Option<Epub>>>;
 type JsResult<T> = std::result::Result<T, JsValue>;
 type EventHandler = Box<FnMut(Event) -> JsResult<()>>;
 trait OnceEventHandler: FnOnce(Event) -> JsResult<()> + 'static {}
@@ -35,7 +36,7 @@ pub fn run() -> JsResult<()> {
 }
 
 struct LeedorApp {
-    epub: Rc<RefCell<Option<Epub>>>,
+    epub: EpubRef,
 }
 
 impl LeedorApp {
@@ -188,16 +189,8 @@ impl LeedorApp {
         let epub_ref = self.epub.clone();
         let handler = move |e: Event| -> JsResult<()> {
             let file_reader: FileReader = e.target().ok_or("no event target")?.dyn_into()?;
-            let contents_buf: ArrayBuffer = file_reader.result()?.into();
-            let mut bytes = vec![0; contents_buf.byte_length() as usize];
-            Uint8Array::new(&contents_buf).copy_to(&mut bytes);
-            let mut epub_option = epub_ref.borrow_mut();
-            *epub_option = Some(Epub::new(bytes)?);
-            let epub = epub_option.as_mut().ok_or("no epub")?;
-            let first_chapter = epub.chapter(0)?;
-            render_toc(&epub.toc()?)?;
-            render_content(&first_chapter)?;
-            Ok(())
+            let array_buffer: ArrayBuffer = file_reader.result()?.into();
+            load_from_buffer(&epub_ref, &array_buffer)
         };
         Box::new(handler)
     }
@@ -211,21 +204,14 @@ impl LeedorApp {
             let window = web_sys::window().ok_or("no window")?;
             let fetch_promise = window.fetch_with_str(&format!("static/{}.epub", &href[1..]));
             let future = JsFuture::from(fetch_promise)
-                .and_then(|response_val| -> JsResult<Promise> {
-                    let response: Response = response_val.dyn_into()?;
+                .and_then(|response_val: JsValue| -> JsResult<Promise> {
+                    let response: Response = response_val.into();
                     response.array_buffer()
                 })
                 .and_then(JsFuture::from)
                 .and_then(move |array_buffer_val: JsValue| -> JsResult<JsValue> {
-                    let array_buffer: ArrayBuffer = array_buffer_val.dyn_into()?;
-                    let mut bytes = vec![0; array_buffer.byte_length() as usize];
-                    Uint8Array::new(&array_buffer).copy_to(&mut bytes);
-                    let mut epub_option = epub_ref.borrow_mut();
-                    *epub_option = Some(Epub::new(bytes)?);
-                    let epub = epub_option.as_mut().ok_or("no epub")?;
-                    let first_chapter = epub.chapter(0)?;
-                    render_toc(&epub.toc()?)?;
-                    render_content(&first_chapter)?;
+                    let array_buffer: ArrayBuffer = array_buffer_val.into();
+                    load_from_buffer(&epub_ref, &array_buffer)?;
                     Ok(JsValue::from(0))
                 });
             future_to_promise(future);
@@ -264,6 +250,17 @@ where
     event_target.add_event_listener_with_callback(event, handler_cl.as_ref().unchecked_ref())?;
     handler_cl.forget();
     Ok(())
+}
+
+fn load_from_buffer(epub_ref: &EpubRef, array_buffer: &ArrayBuffer) -> JsResult<()> {
+    let mut bytes = vec![0; array_buffer.byte_length() as usize];
+    Uint8Array::new(&array_buffer).copy_to(&mut bytes);
+    let mut epub_option = epub_ref.borrow_mut();
+    *epub_option = Some(Epub::new(bytes)?);
+    let epub = epub_option.as_mut().ok_or("no epub")?;
+    let first_chapter = epub.chapter(0)?;
+    render_toc(&epub.toc()?)?;
+    render_content(&first_chapter)
 }
 
 fn render_toc(toc: &[TocItem]) -> JsResult<()> {
