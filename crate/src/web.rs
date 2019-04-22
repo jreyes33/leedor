@@ -103,12 +103,15 @@ impl LeedorApp {
                 epub.chapter_by_link(&href)?
             };
             render_content(&content)?;
+            let document = document()?;
+            let toc_nav = document.get_element_by_id("toc-nav").ok_or("no #toc-nav")?;
+            toc_nav.class_list().add_1("hidden")?;
             let url = utils::parse_relative_url(&href)?;
             let fragment = match url.fragment() {
                 Some(s) => s,
                 None => return Ok(()),
             };
-            let shadow_root = document()?
+            let shadow_root = document
                 .get_element_by_id("content")
                 .ok_or("no #content")?
                 .shadow_root()
