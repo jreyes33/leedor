@@ -9,14 +9,45 @@
   <body>
     <main>
       <div class="toolbar">
-        <input id="file" type="file" name="file">
-        <button id="prev">‹</button>
-        <button id="next">›</button>
-        <button id="smaller">-</button>
-        <button id="larger">+</button>
+        <label>
+          Open an EPUB:
+          <input id="file" type="file" name="file" accept="application/epub+zip">
+        </label>
+        <div>
+          <button id="toggle-toc" title="Toggle Table of Contents">
+            <svg class="icon icon-toc">
+              <use xlink:href="img/icons.svg#icon-toc" />
+            </svg>
+          </button>
+          <button id="smaller" title="Decrease font size">
+            <svg class="icon icon-minus">
+              <use xlink:href="img/icons.svg#icon-minus" />
+            </svg>
+          </button>
+          <button id="larger" title="Increase font size">
+            <svg class="icon icon-plus">
+              <use xlink:href="img/icons.svg#icon-plus" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="chapter-nav prev-wrapper">
+        <button id="prev" title="Previous">
+          <svg class="icon icon-prev">
+            <use xlink:href="img/icons.svg#icon-prev" />
+          </svg>
+        </button>
+      </div>
+      <div class="chapter-nav next-wrapper">
+        <button id="next" title="Next">
+          <svg class="icon icon-next">
+            <use xlink:href="img/icons.svg#icon-next" />
+          </svg>
+        </button>
       </div>
       <div id="content" class="content"></div>
-      <nav class="toc-nav">
+      <nav id="toc-nav" class="toc-nav hidden">
+        <h2>Table of Contents</h2>
         <ul id="toc" class="toc"></ul>
       </nav>
     </main>

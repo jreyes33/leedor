@@ -49,6 +49,9 @@ impl LeedorApp {
         let next_button = document.get_element_by_id("next").ok_or("no #next")?;
         let smaller_button = document.get_element_by_id("smaller").ok_or("no #smaller")?;
         let larger_button = document.get_element_by_id("larger").ok_or("no #larger")?;
+        let toggle_toc = document
+            .get_element_by_id("toggle-toc")
+            .ok_or("no #toggle-toc")?;
         let toc = document.get_element_by_id("toc").ok_or("no #toc")?;
         let content = document.get_element_by_id("content").ok_or("no #content")?;
         let shadow_root = content.attach_shadow(&ShadowRootInit::new(ShadowRootMode::Open))?;
@@ -57,6 +60,7 @@ impl LeedorApp {
         add_event_listener(next_button, "click", self.handle_arrows(Cmp::More))?;
         add_event_listener(smaller_button, "click", self.handle_font(Cmp::Less))?;
         add_event_listener(larger_button, "click", self.handle_font(Cmp::More))?;
+        add_event_listener(toggle_toc, "click", self.handle_toggle_toc())?;
         add_event_listener(toc, "click", self.handle_click(true))?;
         add_event_listener(shadow_root, "click", self.handle_click(false))?;
         Ok(())
@@ -142,6 +146,17 @@ impl LeedorApp {
             };
             let new_val = min(max(old_val + delta, FONT_SIZE_MIN), FONT_SIZE_MAX);
             style.set_property("font-size", &format!("{}px", new_val))?;
+            Ok(())
+        };
+        Box::new(handler)
+    }
+
+    fn handle_toggle_toc(&self) -> EventHandler {
+        let handler = move |_| -> JsResult<()> {
+            let toc_nav = document()?
+                .get_element_by_id("toc-nav")
+                .ok_or("no #toc-nav")?;
+            toc_nav.class_list().toggle("hidden")?;
             Ok(())
         };
         Box::new(handler)

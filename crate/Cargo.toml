@@ -43,6 +43,7 @@ features = [
   "Blob",
   "CssStyleDeclaration",
   "Document",
+  "DomTokenList",
   "Element",
   "Event",
   "EventTarget",

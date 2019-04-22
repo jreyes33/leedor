@@ -1,6 +1,7 @@
 const path = require("path")
 const dist = path.resolve(__dirname, "dist")
 const crate = path.resolve(__dirname, "crate")
+const CopyPlugin = require("copy-webpack-plugin")
 const HtmlWebpackPlugin = require("html-webpack-plugin")
 const CspHtmlWebpackPlugin = require("csp-html-webpack-plugin")
 const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin")
@@ -17,6 +18,7 @@ module.exports = {
     hot: true,
   },
   plugins: [
+    new CopyPlugin([{from: "img", to: "img"}]),
     new HtmlWebpackPlugin({
       template: "index.html",
       favicon: "favicon.ico",
