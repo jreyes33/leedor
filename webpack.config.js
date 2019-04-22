@@ -18,7 +18,7 @@ module.exports = {
     hot: true,
   },
   plugins: [
-    new CopyPlugin([{from: "img", to: "img"}]),
+    new CopyPlugin([{from: "static", to: "static"}]),
     new HtmlWebpackPlugin({
       template: "index.html",
       favicon: "favicon.ico",

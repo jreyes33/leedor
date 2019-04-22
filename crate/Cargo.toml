@@ -24,11 +24,13 @@ lazy_static = "1.2.0"
 [dependencies]
 base64 = "0.10.1"
 cfg-if = "0.1.6"
+futures = "0.1.26"
 js-sys = "0.3.10"
 minidom = "0.10.0"
 quick-xml = "0.13.2"
 url = "1.7.2"
 wasm-bindgen = "0.2.33"
+wasm-bindgen-futures = "0.3.19"
 console_error_panic_hook = { version = "0.1.5", optional = true }
 wee_alloc = { version = "0.4.3", optional = true }
 
@@ -53,6 +55,7 @@ features = [
   "HtmlElement",
   "HtmlInputElement",
   "Node",
+  "Response",
   "ShadowRoot",
   "ShadowRootInit",
   "ShadowRootMode",

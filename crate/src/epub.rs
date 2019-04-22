@@ -238,7 +238,7 @@ mod tests {
     use super::*;
 
     lazy_static::lazy_static! {
-        static ref BYTES: Vec<u8> = std::fs::read("tests/ebooks/rosa.epub").unwrap();
+        static ref BYTES: Vec<u8> = std::fs::read("../static/briefe.epub").unwrap();
     }
 
     type Result<T> = std::result::Result<T, Box<std::error::Error>>;

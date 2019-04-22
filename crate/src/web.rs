@@ -1,14 +1,16 @@
 use crate::epub::{Epub, TocItem};
 use crate::utils;
-use js_sys::{ArrayBuffer, Uint8Array};
+use futures::Future;
+use js_sys::{ArrayBuffer, Promise, Uint8Array};
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
 use url::Url;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::{future_to_promise, JsFuture};
 use web_sys::{
-    Document, Element, Event, EventTarget, FileReader, HtmlElement, HtmlInputElement,
+    Document, Element, Event, EventTarget, FileReader, HtmlElement, HtmlInputElement, Response,
     ShadowRootInit, ShadowRootMode,
 };
 
@@ -18,6 +20,8 @@ const FONT_SIZE_MIN: isize = 6;
 const FONT_SIZE_MAX: isize = 60;
 type JsResult<T> = std::result::Result<T, JsValue>;
 type EventHandler = Box<FnMut(Event) -> JsResult<()>>;
+trait OnceEventHandler: FnOnce(Event) -> JsResult<()> + 'static {}
+impl<T: FnOnce(Event) -> JsResult<()> + 'static> OnceEventHandler for T {}
 
 enum Cmp {
     More,
@@ -55,6 +59,7 @@ impl LeedorApp {
         let toc = document.get_element_by_id("toc").ok_or("no #toc")?;
         let content = document.get_element_by_id("content").ok_or("no #content")?;
         let shadow_root = content.attach_shadow(&ShadowRootInit::new(ShadowRootMode::Open))?;
+        let samples = document.get_element_by_id("samples").ok_or("no #samples")?;
         add_event_listener(file_input, "change", self.handle_file_change())?;
         add_event_listener(prev_button, "click", self.handle_arrows(Cmp::Less))?;
         add_event_listener(next_button, "click", self.handle_arrows(Cmp::More))?;
@@ -63,6 +68,7 @@ impl LeedorApp {
         add_event_listener(toggle_toc, "click", self.handle_toggle_toc())?;
         add_event_listener(toc, "click", self.handle_click(true))?;
         add_event_listener(shadow_root, "click", self.handle_click(false))?;
+        add_once_event_listener(samples, "click", self.handle_sample_click())?;
         Ok(())
     }
 
@@ -195,6 +201,37 @@ impl LeedorApp {
         };
         Box::new(handler)
     }
+
+    fn handle_sample_click(&self) -> impl OnceEventHandler {
+        let epub_ref = self.epub.clone();
+        |e: Event| -> JsResult<()> {
+            e.prevent_default();
+            let clicked_elem: Element = e.target().ok_or("no event target")?.dyn_into()?;
+            let href = clicked_elem.get_attribute("href").ok_or("no href")?;
+            let window = web_sys::window().ok_or("no window")?;
+            let fetch_promise = window.fetch_with_str(&format!("static/{}.epub", &href[1..]));
+            let future = JsFuture::from(fetch_promise)
+                .and_then(|response_val| -> JsResult<Promise> {
+                    let response: Response = response_val.dyn_into()?;
+                    response.array_buffer()
+                })
+                .and_then(JsFuture::from)
+                .and_then(move |array_buffer_val: JsValue| -> JsResult<JsValue> {
+                    let array_buffer: ArrayBuffer = array_buffer_val.dyn_into()?;
+                    let mut bytes = vec![0; array_buffer.byte_length() as usize];
+                    Uint8Array::new(&array_buffer).copy_to(&mut bytes);
+                    let mut epub_option = epub_ref.borrow_mut();
+                    *epub_option = Some(Epub::new(bytes)?);
+                    let epub = epub_option.as_mut().ok_or("no epub")?;
+                    let first_chapter = epub.chapter(0)?;
+                    render_toc(&epub.toc()?)?;
+                    render_content(&first_chapter)?;
+                    Ok(JsValue::from(0))
+                });
+            future_to_promise(future);
+            Ok(())
+        }
+    }
 }
 
 fn document() -> JsResult<Document> {
@@ -203,7 +240,7 @@ fn document() -> JsResult<Document> {
             return Ok(document);
         }
     }
-    Err(JsValue::from_str("no document"))
+    Err(JsValue::from("no document"))
 }
 
 fn add_event_listener<T>(target: T, event: &str, handler: EventHandler) -> JsResult<()>
@@ -211,6 +248,18 @@ where
     T: Into<EventTarget>,
 {
     let handler_cl = Closure::wrap(handler);
+    let event_target = target.into();
+    event_target.add_event_listener_with_callback(event, handler_cl.as_ref().unchecked_ref())?;
+    handler_cl.forget();
+    Ok(())
+}
+
+fn add_once_event_listener<T, H>(target: T, event: &str, handler: H) -> JsResult<()>
+where
+    T: Into<EventTarget>,
+    H: OnceEventHandler,
+{
+    let handler_cl = Closure::once(handler);
     let event_target = target.into();
     event_target.add_event_listener_with_callback(event, handler_cl.as_ref().unchecked_ref())?;
     handler_cl.forget();
@@ -233,9 +282,10 @@ fn render_toc(toc: &[TocItem]) -> JsResult<()> {
 }
 
 fn render_content(content: &str) -> JsResult<()> {
-    let content_div = document()?
-        .get_element_by_id("content")
-        .ok_or("no #content")?;
+    let document = document()?;
+    let welcome = document.get_element_by_id("welcome").ok_or("no #welcome")?;
+    welcome.class_list().add_1("hidden")?;
+    let content_div = document.get_element_by_id("content").ok_or("no #content")?;
     let shadow_root = content_div.shadow_root().ok_or("no shadow root")?;
     shadow_root.set_inner_html(content);
     content_div.scroll_with_x_and_y(0.0, 0.0);

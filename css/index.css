@@ -19,7 +19,7 @@ main {
   grid-area: toolbar;
   justify-content: space-around;
   padding: 7px 0;
-  z-index: 2;
+  z-index: 3;
 }
 
 .toolbar button {
@@ -53,6 +53,12 @@ main {
   padding: 5px 10px;
 }
 
+.welcome {
+  font-size: 20px;
+  grid-area: content;
+  z-index: 1;
+}
+
 .toc-nav {
   background-color: #fff;
   border: 2px solid #000;
@@ -63,7 +69,7 @@ main {
   padding: 20px;
   grid-area: content;
   width: 80%;
-  z-index: 1;
+  z-index: 2;
 }
 
 .toc-nav ul {
