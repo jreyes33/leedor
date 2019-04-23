@@ -93,16 +93,11 @@ button {
 button:active .icon,
 button:focus .icon,
 button:hover .icon {
-  color: #3d3d3d;
+  opacity: .75;
 }
 
 .icon {
-  color: #000;
-  display: inline-block;
-  fill: currentColor;
   height: 25px;
-  stroke-width: 0;
-  stroke: currentColor;
   width: 25px;
 }
 
