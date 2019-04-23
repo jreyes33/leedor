@@ -4,6 +4,7 @@ const crate = path.resolve(__dirname, "crate")
 const CopyPlugin = require("copy-webpack-plugin")
 const HtmlWebpackPlugin = require("html-webpack-plugin")
 const CspHtmlWebpackPlugin = require("csp-html-webpack-plugin")
+const MiniCssExtractPlugin = require("mini-css-extract-plugin")
 const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin")
 const webpack = require("webpack")
 
@@ -19,6 +20,7 @@ module.exports = {
   },
   plugins: [
     new CopyPlugin([{from: "static", to: "static"}]),
+    new MiniCssExtractPlugin(),
     new HtmlWebpackPlugin({
       template: "index.html",
       favicon: "favicon.ico",
@@ -40,7 +42,15 @@ module.exports = {
     rules: [
       {
         test: /\.css$/,
-        use: ["style-loader", "css-loader"],
+        use: [
+          {
+            loader: MiniCssExtractPlugin.loader,
+            options: {
+              hmr: process.env.NODE_ENV !== "production",
+            },
+          },
+          "css-loader",
+        ],
       },
     ],
   },
