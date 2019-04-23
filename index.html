@@ -1,9 +1,9 @@
-<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="base-uri 'none'; object-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https: 'nonce-+x6qZ6bO4fJXlCcuSKJrqA==' 'strict-dynamic'; style-src 'self' 'unsafe-inline' data:; default-src 'self'; img-src 'self' data:">
+<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="base-uri 'none'; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: 'nonce-IMM1N+vtWEHS37xdwD38Gg==' 'strict-dynamic'; style-src 'self' 'unsafe-inline' data: 'nonce-y+GYmcUMNro3VTGb+JZiMw=='; default-src 'self'; img-src 'self' data:">
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Leedor</title>
-  <link rel="shortcut icon" href="favicon.ico"></head>
+  <link rel="shortcut icon" href="favicon.ico"><link href="main.css" rel="stylesheet" nonce="y+GYmcUMNro3VTGb+JZiMw=="></head>
   <body>
     <main>
       <div class="toolbar">
@@ -13,43 +13,51 @@
         </label>
         <div>
           <button id="toggle-toc" title="Toggle Table of Contents">
-            <svg class="icon icon-toc">
-              <use href="img/icons.svg#icon-toc"/>
-            </svg>
+            <img src="static/toc.svg" class="icon icon-toc">
           </button>
           <button id="smaller" title="Decrease font size">
-            <svg class="icon icon-minus">
-              <use href="img/icons.svg#icon-minus"/>
-            </svg>
+            <img src="static/minus.svg" class="icon icon-minus">
           </button>
           <button id="larger" title="Increase font size">
-            <svg class="icon icon-plus">
-              <use href="img/icons.svg#icon-plus"/>
-            </svg>
+            <img src="static/plus.svg" class="icon icon-plus">
           </button>
         </div>
       </div>
       <div class="chapter-nav prev-wrapper">
         <button id="prev" title="Previous">
-          <svg class="icon icon-prev">
-            <use href="img/icons.svg#icon-prev"/>
-          </svg>
+          <img src="static/prev.svg" class="icon icon-prev">
         </button>
       </div>
       <div class="chapter-nav next-wrapper">
         <button id="next" title="Next">
-          <svg class="icon icon-next">
-            <use href="img/icons.svg#icon-next"/>
-          </svg>
+          <img src="static/next.svg" class="icon icon-next">
         </button>
       </div>
       <div id="content" class="content"></div>
+      <div id="welcome" class="welcome">
+        <h1>Leedor</h1>
+        <p>
+          An EPUB reader written in <a href="https://www.rust-lang.org">Rust</a> and
+          compiled to <a href="https://webassembly.org">WebAssembly</a>.
+        </p>
+        <p>Give it a try! Load a DRM-free eBook from your machine using the form above. </p>
+        <p>You can also click on one of these books to open it:</p>
+        <ul id="samples">
+          <li><a href="#sherlock">The Adventures of Sherlock Holmes</a> by Arthur Conan Doyle (in English)</li>
+          <li><a href="#quijote">Don Quijote</a> by Miguel de Cervantes (in Spanish)</li>
+          <li><a href="#casmurro">Dom Casmurro</a> by Machado de Assis (in Portuguese)</li>
+          <li><a href="#cheri">Chéri</a> by Colette (in French)</li>
+          <li><a href="#briefe">Briefe aus dem Gefängnis</a> by Rosa Luxemburg (in German)</li>
+        </ul>
+        <p>
+          Check out the <a href="https://github.com/jreyes33/leedor">source code on GitHub</a>.
+        </p>
+      </div>
       <nav id="toc-nav" class="toc-nav hidden">
         <h2>Table of Contents</h2>
         <ul id="toc" class="toc"></ul>
       </nav>
     </main>
-  <script type="text/javascript" src="bundle.js" nonce="+x6qZ6bO4fJXlCcuSKJrqA=="></script>
-
+  <script type="text/javascript" src="bundle.js" nonce="IMM1N+vtWEHS37xdwD38Gg=="></script>
 
 </body></html>
