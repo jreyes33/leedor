@@ -31,7 +31,7 @@ module.exports = {
       "object-src": "'none'",
       "img-src": ["'self'", "data:"],
       "style-src": ["'self'", "'unsafe-inline'", "data:"],
-      "script-src": ["'strict-dynamic'", "'unsafe-inline'", "'unsafe-eval'", "https:"],
+      "script-src": ["'self'", "'strict-dynamic'", "'unsafe-inline'", "'unsafe-eval'", "https:"],
     }),
     new WasmPackPlugin({
       crateDirectory: crate,
